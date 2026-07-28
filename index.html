@@ -23,6 +23,8 @@
   const auth = firebase.auth();
   const db = firebase.firestore();
 </script>
+<script src="pizzip.min.js"></script>
+<script src="docxtemplater.min.js"></script>
 <style>
   :root{
     --bg: #0B0E11;
@@ -359,6 +361,37 @@
     <div id="historyResults"></div>
   </div>
 
+  <div class="panel" id="rnPanel">
+    <h2>Generar Repair Note</h2>
+    <p class="sub">Selecciona las unidades en la tabla de abajo (checkbox a la izquierda) y genera el documento .docx automáticamente.</p>
+    <div class="grid">
+      <div class="field">
+        <label>Fecha del Repair Note</label>
+        <input type="date" id="rnDate">
+      </div>
+      <div class="field">
+        <label>Repair Note #</label>
+        <input type="text" id="rnNumberPreview" disabled style="opacity:.7;">
+      </div>
+      <div class="field full" style="display:flex;align-items:flex-end;">
+        <div style="color:var(--muted);font-size:13px;">
+          Unidades seleccionadas: <span class="mono" id="rnSelectedCount" style="color:var(--amber);">0</span>
+        </div>
+      </div>
+      <div class="field full">
+        <label>Pegar Repair Orders (formato de Luisa: SN - Repair Order, uno por línea)</label>
+        <textarea id="rnBulkPaste" placeholder="W01041870822 - R2971526&#10;KONUK10295958 - R3046026"></textarea>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-secondary" id="btnApplyBulkRO">Aplicar Repair Orders</button>
+    </div>
+    <div class="actions">
+      <button class="btn-primary" id="btnGenerateRN">Generar Repair Note (.docx)</button>
+      <button class="btn-secondary" id="btnClearRNSelection">Limpiar selección</button>
+    </div>
+  </div>
+
   <div class="toolbar">
     <div class="filters">
       <button class="filter-btn active" data-filter="todas">Todas</button>
@@ -383,6 +416,7 @@
       <table id="recordsTable">
         <thead>
           <tr>
+            <th><input type="checkbox" id="selectAllCheckbox" title="Seleccionar todas las visibles"></th>
             <th>Estado</th>
             <th>SN</th>
             <th>SPN</th>
@@ -418,6 +452,7 @@ let records = [];
 let masterDB = {}; // sn -> spn
 let editingId = null;
 let currentFilter = 'todas';
+let selectedForRN = new Set();
 let recordsUnsub = null;
 let masterUnsub = null;
 
@@ -637,8 +672,9 @@ function renderTable(){
       progreso: {cls:'row-open', pill:'pill-open', label:'En progreso'}
     }[state];
     tr.className = stateMeta.cls;
-    tr.onclick = ()=>editRecord(r.id);
+    tr.onclick = (e)=>{ if(e.target.type==='checkbox') return; editRecord(r.id); };
     tr.innerHTML = `
+      <td><input type="checkbox" class="row-select" data-id="${r.id}" ${selectedForRN.has(r.id)?'checked':''}></td>
       <td><span class="pill ${stateMeta.pill}">${stateMeta.label}</span></td>
       <td class="cell-id">${r.sn||'—'}</td>
       <td class="cell-id">${r.spn||'—'}</td>
@@ -651,6 +687,10 @@ function renderTable(){
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
       <td class="mono">${r.entregado ? formatDatePretty(r.entregado) : '—'}</td>
     `;
+    tr.querySelector('.row-select').addEventListener('change', (e)=>{
+      if(e.target.checked) selectedForRN.add(r.id); else selectedForRN.delete(r.id);
+      updateRNSelectedCount();
+    });
     tbody.appendChild(tr);
   }
 }
@@ -1034,6 +1074,150 @@ function exportHistoryExcel(query, matches, monthKeys, monthCounts){
 }
 
 document.getElementById('historySearch').addEventListener('input', renderHistoryResults);
+
+// ---- Repair Note generation ----
+function updateRNSelectedCount(){
+  document.getElementById('rnSelectedCount').textContent = selectedForRN.size;
+}
+
+function updateRNNumberPreview(){
+  const dateVal = document.getElementById('rnDate').value;
+  const preview = document.getElementById('rnNumberPreview');
+  if(!dateVal){ preview.value = ''; return; }
+  const [y,m,d] = dateVal.split('-');
+  preview.value = `${d}${m}${y.slice(2)}01`;
+}
+
+// Default the Repair Note date to today
+(function initRNDate(){
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const dd = String(today.getDate()).padStart(2,'0');
+  document.getElementById('rnDate').value = `${yyyy}-${mm}-${dd}`;
+  updateRNNumberPreview();
+})();
+
+document.getElementById('rnDate').addEventListener('input', updateRNNumberPreview);
+
+document.getElementById('selectAllCheckbox').addEventListener('change', (e)=>{
+  document.querySelectorAll('.row-select').forEach(cb=>{
+    cb.checked = e.target.checked;
+    const id = cb.dataset.id;
+    if(e.target.checked) selectedForRN.add(id); else selectedForRN.delete(id);
+  });
+  updateRNSelectedCount();
+});
+
+document.getElementById('btnClearRNSelection').addEventListener('click', ()=>{
+  selectedForRN.clear();
+  document.getElementById('selectAllCheckbox').checked = false;
+  renderTable();
+  updateRNSelectedCount();
+});
+
+document.getElementById('btnApplyBulkRO').addEventListener('click', async ()=>{
+  const raw = document.getElementById('rnBulkPaste').value.trim();
+  if(!raw){ showToast('Pega el bloque de Luisa primero'); return; }
+
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const parsed = [];
+  for(const line of lines){
+    const parts = line.split(/[-\t]+|\s+/).map(p=>p.trim()).filter(Boolean);
+    if(parts.length < 2) continue;
+    const sn = parts[0].toUpperCase();
+    const repairOrder = parts[1].toUpperCase();
+    parsed.push({ sn, repairOrder });
+  }
+  if(parsed.length===0){
+    showToast('No se reconoció ningún par SN - Repair Order');
+    return;
+  }
+
+  let updated = 0;
+  const notFound = [];
+  const alreadyHad = [];
+
+  try{
+    const batch = db.batch();
+    for(const {sn, repairOrder} of parsed){
+      // Prefer records with this SN that don't have a repair order yet, most recently received first
+      const candidates = records
+        .filter(r => (r.sn||'').toUpperCase() === sn)
+        .sort((a,b) => (b.recibido||'').localeCompare(a.recibido||''));
+
+      if(candidates.length === 0){
+        notFound.push(sn);
+        continue;
+      }
+
+      const target = candidates.find(r => !r.repairorder) || candidates[0];
+      if(target.repairorder && target.repairorder !== repairOrder){
+        alreadyHad.push(sn);
+      }
+      batch.update(db.collection('records').doc(target.id), { repairorder: repairOrder });
+      selectedForRN.add(target.id);
+      updated++;
+    }
+    await batch.commit();
+  }catch(e){
+    showToast('Error aplicando: ' + e.message);
+    return;
+  }
+
+  document.getElementById('rnBulkPaste').value = '';
+  updateRNSelectedCount();
+
+  let msg = `${updated} actualizados y seleccionados`;
+  if(notFound.length) msg += ` · sin encontrar: ${notFound.join(', ')}`;
+  if(alreadyHad.length) msg += ` · ya tenían otro Repair Order (sobrescrito): ${alreadyHad.join(', ')}`;
+  showToast(msg);
+});
+
+document.getElementById('btnGenerateRN').addEventListener('click', async ()=>{
+  const selected = records.filter(r=>selectedForRN.has(r.id));
+  if(selected.length===0){
+    showToast('Selecciona al menos una unidad en la tabla');
+    return;
+  }
+  const missing = selected.filter(r=>!r.repairorder);
+  if(missing.length>0){
+    showToast(`Falta Repair Order en: ${missing.map(r=>r.sn).join(', ')}`);
+    return;
+  }
+  const dateVal = document.getElementById('rnDate').value;
+  if(!dateVal){
+    showToast('Selecciona la fecha del Repair Note');
+    return;
+  }
+  const [y,m,d] = dateVal.split('-');
+  const repairNote = `${d}${m}${y.slice(2)}01`;
+  const prettyDate = formatDatePretty(dateVal);
+  const snList = selected.map(r=>r.sn).join('\n');
+  const orderList = selected.map(r=>r.repairorder).join('\n');
+
+  try{
+    const response = await fetch('./rn-template.docx');
+    if(!response.ok) throw new Error('No se encontró rn-template.docx');
+    const arrayBuffer = await response.arrayBuffer();
+    const zip = new PizZip(arrayBuffer);
+    const doc = new docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+    doc.render({ repairNote, date: prettyDate, snList, orderList });
+    const out = doc.getZip().generate({
+      type: 'blob',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+    const url = URL.createObjectURL(out);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `RepairNote-${repairNote}.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Repair Note generado');
+  }catch(e){
+    showToast('Error generando el documento: ' + e.message);
+  }
+});
 
 // ---- Auth ----
 document.getElementById('btnLogin').addEventListener('click', doLogin);
