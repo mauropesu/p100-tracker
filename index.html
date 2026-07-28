@@ -306,6 +306,7 @@
           <option>Ready to Dispatch</option>
           <option>Dispatched</option>
           <option>Successful</option>
+          <option>Damaged</option>
         </select>
       </div>
       <div class="field mono">
@@ -637,6 +638,28 @@ function pillClass(v){
   return 'pill-neutral';
 }
 
+const STATUS_STYLES = {
+  'Pending':         { fg: '#8A93A3', bg: '#262B36' },
+  'Ready':           { fg: '#2FD1E8', bg: '#123338' },
+  'Syncing':         { fg: '#8C7CF2', bg: '#242140' },
+  'Testing':         { fg: '#B18CF2', bg: '#2E2340' },
+  'Reimage':         { fg: '#F26B9E', bg: '#3A1F2C' },
+  'Working on it':   { fg: '#F2793B', bg: '#3A2416' },
+  'Dispatched':      { fg: '#8CF26B', bg: '#223A1C' },
+  'Successful':      { fg: '#5BE07A', bg: '#163A1E' },
+  'Damaged':         { fg: '#E15554', bg: '#341A19' },
+};
+
+function getRowDisplay(r){
+  if(r.entregado) return { label: 'Entregada', fg: 'var(--teal)', bg: 'var(--teal-dim)' };
+  if(r.status === 'Ready to Dispatch') return { label: 'Awaiting', fg: 'var(--yellow)', bg: 'var(--yellow-dim)' };
+  if(r.status && STATUS_STYLES[r.status]){
+    const s = STATUS_STYLES[r.status];
+    return { label: r.status, fg: s.fg, bg: s.bg };
+  }
+  return { label: 'En progreso', fg: 'var(--amber)', bg: 'var(--amber-dim)' };
+}
+
 function renderTable(){
   let list = records.slice();
   if(currentFilter!=='todas'){
@@ -667,17 +690,12 @@ function renderTable(){
 
   for(const r of list){
     const tr = document.createElement('tr');
-    const state = getRecordState(r);
-    const stateMeta = {
-      entregada: {cls:'row-done', pill:'pill-done', label:'Entregada'},
-      awaiting: {cls:'row-await', pill:'pill-await', label:'Awaiting'},
-      progreso: {cls:'row-open', pill:'pill-open', label:'En progreso'}
-    }[state];
-    tr.className = stateMeta.cls;
+    const disp = getRowDisplay(r);
+    tr.style.boxShadow = 'none';
     tr.onclick = (e)=>{ if(e.target.type==='checkbox') return; editRecord(r.id); };
     tr.innerHTML = `
-      <td><input type="checkbox" class="row-select" data-id="${r.id}" ${selectedForRN.has(r.id)?'checked':''}></td>
-      <td><span class="pill ${stateMeta.pill}">${stateMeta.label}</span></td>
+      <td style="box-shadow: inset 3px 0 0 ${disp.fg};"><input type="checkbox" class="row-select" data-id="${r.id}" ${selectedForRN.has(r.id)?'checked':''}></td>
+      <td><span class="pill" style="color:${disp.fg};background:${disp.bg};">${disp.label}</span></td>
       <td class="cell-id">${r.sn||'—'}</td>
       <td class="cell-id">${r.spn||'—'}</td>
       <td class="mono">${r.vm||'—'}</td>
