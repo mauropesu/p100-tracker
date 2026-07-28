@@ -218,12 +218,15 @@
   #loginError{color:var(--red);font-size:13px;margin-top:10px;display:none;}
   #appShell{display:none;}
   .logout-btn{background:transparent;border:1px solid var(--line);color:var(--muted);font-size:12px;padding:8px 14px;}
+  .immfly-logo{background:#fff;padding:8px 14px;border-radius:8px;display:inline-block;line-height:0;}
+  .immfly-logo img{height:22px;display:block;}
 </style>
 </head>
 <body>
 
 <div id="loginScreen">
   <div class="box">
+    <div class="immfly-logo" style="margin-bottom:18px;"><img src="immfly-logo.jpg" alt="Immfly"></div>
     <h1>P100 · Inventario &amp; Mantenimiento</h1>
     <p>Ingresa con tu usuario para acceder.</p>
     <div class="field">
@@ -241,9 +244,12 @@
 
 <div id="appShell">
 <header>
-  <div>
-    <p class="brand-eyebrow">Immfly · P100 IFE Ground Ops</p>
-    <h1>Inventario &amp; Mantenimiento</h1>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="immfly-logo"><img src="immfly-logo.jpg" alt="Immfly"></div>
+    <div>
+      <p class="brand-eyebrow">Immfly · P100 IFE Ground Ops</p>
+      <h1>Inventario &amp; Mantenimiento</h1>
+    </div>
   </div>
   <div class="stats">
     <div class="stat open"><div class="n" id="statOpen">0</div><div class="l">En progreso</div></div>
