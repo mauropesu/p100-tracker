@@ -761,9 +761,9 @@ function applyHistoryToForm(sn){
   document.getElementById('f_vpn').value = rec.vpn || '';
   document.getElementById('f_bateria').value = rec.bateria || '';
   document.getElementById('f_status').value = rec.status || '';
+  document.getElementById('f_repairorder').value = rec.repairorder || '';
   document.getElementById('f_notes').value = rec.notes || '';
-  // Repair Order and dates are specific to each dispatch, so they are intentionally left blank/reset
-  document.getElementById('f_repairorder').value = '';
+  // Dates are specific to each dispatch, so they are intentionally left blank/reset
   showToast('Se completaron los campos con el último registro de esta unidad');
   return true;
 }
