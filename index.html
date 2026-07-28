@@ -253,7 +253,6 @@
   </div>
   <div class="stats">
     <div class="stat open"><div class="n" id="statOpen">0</div><div class="l">En progreso</div></div>
-    <div class="stat" id="statAwaitingWrap"><div class="n" id="statAwaiting" style="color:var(--yellow);">0</div><div class="l">Awaiting</div></div>
     <div class="stat done"><div class="n" id="statDone">0</div><div class="l">Entregadas</div></div>
     <div class="stat"><div class="n mono" id="statTotal">0</div><div class="l">Total registros</div></div>
     <button class="logout-btn" id="btnLogout">Cerrar sesión</button>
@@ -304,14 +303,11 @@
         <select id="f_status">
           <option value="">—</option>
           <option>Pending</option>
-          <option>Ready</option>
-          <option>Syncing</option>
+          <option>In Progress</option>
+          <option>Syncing Media</option>
           <option>Testing</option>
-          <option>Reimage</option>
-          <option>Working on it</option>
-          <option>Ready to Dispatch</option>
+          <option>Ready</option>
           <option>Dispatched</option>
-          <option>Successful</option>
           <option>Damaged</option>
         </select>
       </div>
@@ -403,10 +399,17 @@
 
   <div class="toolbar">
     <div class="filters">
-      <button class="filter-btn active" data-filter="todas">Todas</button>
-      <button class="filter-btn" data-filter="progreso">En progreso</button>
-      <button class="filter-btn" data-filter="awaiting">Awaiting</button>
-      <button class="filter-btn" data-filter="entregada">Entregadas</button>
+      <select id="statusFilter" style="background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13px;">
+        <option value="todas">Todas</option>
+        <option value="entregada">Entregadas</option>
+        <option value="Pending">Pending</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Syncing Media">Syncing Media</option>
+        <option value="Testing">Testing</option>
+        <option value="Ready">Ready</option>
+        <option value="Dispatched">Dispatched</option>
+        <option value="Damaged">Damaged</option>
+      </select>
     </div>
     <div class="search-table">
       <input type="text" id="tableSearch" placeholder="Filtrar tabla...">
@@ -490,6 +493,8 @@ function showToast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
+let statusMigrationDone = false;
+
 function startListeners(){
   // Records: real-time listener on the 'records' collection
   recordsUnsub = db.collection('records').onSnapshot(snapshot=>{
@@ -498,6 +503,21 @@ function startListeners(){
     updateStats();
     // Refresh the unit-history panel if it's showing a search
     if(document.getElementById('historySearch').value.trim()) renderHistoryResults();
+
+    // One-time migration: rewrite any legacy status values to their new equivalents
+    if(!statusMigrationDone){
+      statusMigrationDone = true;
+      const toMigrate = records.filter(r => r.status && STATUS_LEGACY_MAP[r.status]);
+      if(toMigrate.length > 0){
+        const batch = db.batch();
+        toMigrate.forEach(r=>{
+          batch.update(db.collection('records').doc(r.id), { status: STATUS_LEGACY_MAP[r.status] });
+        });
+        batch.commit()
+          .then(()=> showToast(`${toMigrate.length} registro(s) migrados al nuevo STATUS`))
+          .catch(e => showToast('Error migrando STATUS: ' + e.message));
+      }
+    }
   }, err=>{
     showToast('Error leyendo registros: ' + err.message);
   });
@@ -524,6 +544,7 @@ function stopListeners(){
   if(masterUnsub) masterUnsub();
   records = [];
   masterDB = {};
+  statusMigrationDone = false;
 }
 
 async function saveMaster(){
@@ -536,17 +557,13 @@ function updateMasterCount(){
 }
 
 function getRecordState(r){
-  if(r.entregado) return 'entregada';
-  if(r.status === 'Ready to Dispatch') return 'awaiting';
-  return 'progreso';
+  return r.entregado ? 'entregada' : 'progreso';
 }
 
 function updateStats(){
   const open = records.filter(r=>getRecordState(r)==='progreso').length;
-  const awaiting = records.filter(r=>getRecordState(r)==='awaiting').length;
   const done = records.filter(r=>getRecordState(r)==='entregada').length;
   document.getElementById('statOpen').textContent = open;
-  document.getElementById('statAwaiting').textContent = awaiting;
   document.getElementById('statDone').textContent = done;
   document.getElementById('statTotal').textContent = records.length;
 }
@@ -570,7 +587,7 @@ function fillForm(rec){
   document.getElementById('f_sn').value = rec.sn||'';
   document.getElementById('f_spn').value = rec.spn||'';
   document.getElementById('f_vm').value = rec.vm||'';
-  document.getElementById('f_status').value = rec.status||'';
+  document.getElementById('f_status').value = (STATUS_LEGACY_MAP[rec.status] || rec.status || '');
   document.getElementById('f_repairorder').value = rec.repairorder||'';
   document.getElementById('f_vpn').value = rec.vpn||'';
   document.getElementById('f_bateria').value = rec.bateria||'';
@@ -646,30 +663,39 @@ function pillClass(v){
 
 const STATUS_STYLES = {
   'Pending':         { fg: '#8A93A3', bg: '#262B36' },
-  'Ready':           { fg: '#2FD1E8', bg: '#123338' },
-  'Syncing':         { fg: '#8C7CF2', bg: '#242140' },
+  'In Progress':     { fg: '#F2793B', bg: '#3A2416' },
+  'Syncing Media':   { fg: '#8C7CF2', bg: '#242140' },
   'Testing':         { fg: '#B18CF2', bg: '#2E2340' },
-  'Reimage':         { fg: '#F26B9E', bg: '#3A1F2C' },
-  'Working on it':   { fg: '#F2793B', bg: '#3A2416' },
+  'Ready':           { fg: 'var(--yellow)', bg: 'var(--yellow-dim)' },
   'Dispatched':      { fg: '#8CF26B', bg: '#223A1C' },
-  'Successful':      { fg: '#5BE07A', bg: '#163A1E' },
   'Damaged':         { fg: '#E15554', bg: '#341A19' },
+};
+
+// Old status names still on some existing records, mapped to their new equivalents for display
+const STATUS_LEGACY_MAP = {
+  'Working on it': 'In Progress',
+  'Ready to Dispatch': 'Ready',
+  'Reimage': 'In Progress',
+  'Successful': 'Dispatched',
+  'Syncing': 'Syncing Media',
 };
 
 function getRowDisplay(r){
   if(r.entregado) return { label: 'Entregada', fg: 'var(--teal)', bg: 'var(--teal-dim)' };
-  if(r.status === 'Ready to Dispatch') return { label: 'Ready to Dispatch', fg: 'var(--yellow)', bg: 'var(--yellow-dim)' };
-  if(r.status && STATUS_STYLES[r.status]){
-    const s = STATUS_STYLES[r.status];
-    return { label: r.status, fg: s.fg, bg: s.bg };
+  const effectiveStatus = STATUS_LEGACY_MAP[r.status] || r.status;
+  if(effectiveStatus && STATUS_STYLES[effectiveStatus]){
+    const s = STATUS_STYLES[effectiveStatus];
+    return { label: effectiveStatus, fg: s.fg, bg: s.bg };
   }
   return { label: 'En progreso', fg: 'var(--amber)', bg: 'var(--amber-dim)' };
 }
 
 function renderTable(){
   let list = records.slice();
-  if(currentFilter!=='todas'){
-    list = list.filter(r => getRecordState(r)===currentFilter);
+  if(currentFilter==='entregada'){
+    list = list.filter(r => !!r.entregado);
+  } else if(currentFilter!=='todas'){
+    list = list.filter(r => (STATUS_LEGACY_MAP[r.status] || r.status) === currentFilter);
   }
   const q = document.getElementById('tableSearch').value.trim().toLowerCase();
   if(q){
@@ -721,13 +747,9 @@ function renderTable(){
   }
 }
 
-document.querySelectorAll('.filter-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    currentFilter = btn.dataset.filter;
-    renderTable();
-  });
+document.getElementById('statusFilter').addEventListener('change', (e)=>{
+  currentFilter = e.target.value;
+  renderTable();
 });
 
 document.getElementById('tableSearch').addEventListener('input', renderTable);
@@ -760,7 +782,7 @@ function applyHistoryToForm(sn){
   document.getElementById('f_vm').value = rec.vm || '';
   document.getElementById('f_vpn').value = rec.vpn || '';
   document.getElementById('f_bateria').value = rec.bateria || '';
-  document.getElementById('f_status').value = rec.status || '';
+  document.getElementById('f_status').value = (STATUS_LEGACY_MAP[rec.status] || rec.status || '');
   document.getElementById('f_repairorder').value = rec.repairorder || '';
   document.getElementById('f_notes').value = rec.notes || '';
   // If the most recent record was already delivered, show its real dates as reference.
@@ -1021,6 +1043,7 @@ document.getElementById('btnRestore').addEventListener('change', (e)=>{
 
       await db.collection('meta').doc('masterdb').set({ entries: newMasterDB });
 
+      statusMigrationDone = false;
       showToast('Respaldo restaurado correctamente');
     }catch(err){
       showToast('Archivo de respaldo inválido o error: ' + err.message);
