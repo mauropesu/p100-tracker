@@ -763,7 +763,14 @@ function applyHistoryToForm(sn){
   document.getElementById('f_status').value = rec.status || '';
   document.getElementById('f_repairorder').value = rec.repairorder || '';
   document.getElementById('f_notes').value = rec.notes || '';
-  // Dates are specific to each dispatch, so they are intentionally left blank/reset
+  // If the most recent record was already delivered, show its real dates as reference.
+  // Otherwise, leave recibido defaulting to today and entregado blank (new/ongoing visit).
+  if(rec.entregado){
+    document.getElementById('f_recibido').value = rec.recibido || '';
+    document.getElementById('f_entregado').value = rec.entregado || '';
+    updateDatePreview('f_recibido','recibidoPretty');
+    updateDatePreview('f_entregado','entregadoPretty');
+  }
   showToast('Se completaron los campos con el último registro de esta unidad');
   return true;
 }
