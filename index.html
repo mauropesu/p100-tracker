@@ -658,7 +658,7 @@ const STATUS_STYLES = {
 
 function getRowDisplay(r){
   if(r.entregado) return { label: 'Entregada', fg: 'var(--teal)', bg: 'var(--teal-dim)' };
-  if(r.status === 'Ready to Dispatch') return { label: 'Awaiting', fg: 'var(--yellow)', bg: 'var(--yellow-dim)' };
+  if(r.status === 'Ready to Dispatch') return { label: 'Ready to Dispatch', fg: 'var(--yellow)', bg: 'var(--yellow-dim)' };
   if(r.status && STATUS_STYLES[r.status]){
     const s = STATUS_STYLES[r.status];
     return { label: r.status, fg: s.fg, bg: s.bg };
