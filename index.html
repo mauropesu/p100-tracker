@@ -746,6 +746,28 @@ function findMasterMatches(q){
   return out;
 }
 
+function getMostRecentRecordForSN(sn){
+  const matches = records.filter(r => (r.sn||'').toUpperCase() === sn);
+  if(matches.length===0) return null;
+  matches.sort((a,b)=>(b.recibido||'').localeCompare(a.recibido||''));
+  return matches[0];
+}
+
+function applyHistoryToForm(sn){
+  const rec = getMostRecentRecordForSN(sn);
+  if(!rec) return false;
+  if(!document.getElementById('f_spn').value.trim() && rec.spn) document.getElementById('f_spn').value = rec.spn;
+  document.getElementById('f_vm').value = rec.vm || '';
+  document.getElementById('f_vpn').value = rec.vpn || '';
+  document.getElementById('f_bateria').value = rec.bateria || '';
+  document.getElementById('f_status').value = rec.status || '';
+  document.getElementById('f_notes').value = rec.notes || '';
+  // Repair Order and dates are specific to each dispatch, so they are intentionally left blank/reset
+  document.getElementById('f_repairorder').value = '';
+  showToast('Se completaron los campos con el último registro de esta unidad');
+  return true;
+}
+
 function checkSnValidity(){
   const sn = document.getElementById('f_sn').value.trim().toUpperCase();
   const warn = document.getElementById('snWarning');
@@ -793,10 +815,11 @@ lookupInput.addEventListener('input', ()=>{
       document.getElementById('f_sn').value = sn;
       document.getElementById('f_spn').value = spn;
       checkSnValidity();
+      const hadHistory = applyHistoryToForm(sn);
+      if(!hadHistory) showToast('Unidad nueva: SN y SPN autocompletados desde la base maestra');
       suggestionsBox.style.display = 'none';
       lookupInput.value = '';
       document.getElementById('f_vm').focus();
-      showToast('Unidad autocompletada desde la base maestra');
     };
     suggestionsBox.appendChild(div);
   }
@@ -822,11 +845,18 @@ snField.addEventListener('input', ()=>{
       snField.value = sn;
       document.getElementById('f_spn').value = spn;
       checkSnValidity();
+      applyHistoryToForm(sn);
       snFormSuggestions.style.display = 'none';
     };
     snFormSuggestions.appendChild(div);
   }
   snFormSuggestions.style.display = 'block';
+});
+
+snField.addEventListener('blur', ()=>{
+  if(editingId) return; // don't overwrite data while editing an existing record
+  const sn = snField.value.trim().toUpperCase();
+  if(sn && masterDB[sn]) applyHistoryToForm(sn);
 });
 
 function updateDatePreview(inputId, previewId){
