@@ -619,6 +619,13 @@ document.getElementById('btnSave').addEventListener('click', async ()=>{
     showToast('Ingresa al menos el SN');
     return;
   }
+  if(!editingId){
+    const openDuplicate = records.find(r => (r.sn||'').toUpperCase() === data.sn && !r.entregado);
+    if(openDuplicate){
+      const proceed = confirm(`Ya existe un registro abierto para el SN ${data.sn} (STATUS: ${openDuplicate.status || 'sin status'}). ¿Quieres crear uno nuevo de todas formas?`);
+      if(!proceed) return;
+    }
+  }
   try{
     if(editingId){
       await db.collection('records').doc(editingId).set(data, { merge: true });
@@ -840,20 +847,37 @@ lookupInput.addEventListener('input', ()=>{
     const div = document.createElement('div');
     div.className = 'suggestion-item';
     div.innerHTML = `<span class="tag">${sn}</span><span class="meta">${spn}</span>`;
-    div.onclick = ()=>{
-      clearForm();
-      document.getElementById('f_sn').value = sn;
-      document.getElementById('f_spn').value = spn;
-      checkSnValidity();
-      const hadHistory = applyHistoryToForm(sn);
-      if(!hadHistory) showToast('Unidad nueva: SN y SPN autocompletados desde la base maestra');
-      suggestionsBox.style.display = 'none';
-      lookupInput.value = '';
-      document.getElementById('f_vm').focus();
-    };
+    div.onclick = ()=> selectLookupMatch(sn, spn);
     suggestionsBox.appendChild(div);
   }
   suggestionsBox.style.display = 'block';
+});
+
+function selectLookupMatch(sn, spn){
+  clearForm();
+  document.getElementById('f_sn').value = sn;
+  document.getElementById('f_spn').value = spn;
+  checkSnValidity();
+  const hadHistory = applyHistoryToForm(sn);
+  if(!hadHistory) showToast('Unidad nueva: SN y SPN autocompletados desde la base maestra');
+  suggestionsBox.style.display = 'none';
+  lookupInput.value = '';
+  document.getElementById('f_vm').focus();
+}
+
+lookupInput.addEventListener('keydown', (e)=>{
+  if(e.key !== 'Enter') return;
+  const q = lookupInput.value.trim();
+  if(q.length < 3) return;
+  const matches = findMasterMatches(q);
+  if(matches.length === 0){
+    showToast(`No se encontró ninguna unidad para "${q}"`);
+    return;
+  }
+  // Prefer an exact SN or SPN match; otherwise take the first suggestion
+  const exact = matches.find(([sn,spn]) => sn.toUpperCase() === q.toUpperCase() || spn.toUpperCase() === q.toUpperCase());
+  const [sn, spn] = exact || matches[0];
+  selectLookupMatch(sn, spn);
 });
 
 // SN field inline autocomplete + validation
