@@ -913,6 +913,33 @@ snField.addEventListener('blur', ()=>{
   if(sn && masterDB[sn]) applyHistoryToForm(sn);
 });
 
+function findSNForSPN(spn){
+  for(const sn in masterDB){
+    if(masterDB[sn] === spn) return sn;
+  }
+  return null;
+}
+
+function applySPNLookup(){
+  if(editingId) return; // don't overwrite data while editing an existing record
+  const spn = document.getElementById('f_spn').value.trim().toUpperCase();
+  if(!spn) return;
+  const sn = findSNForSPN(spn);
+  if(!sn){
+    showToast(`No se encontró ninguna unidad para el SPN "${spn}"`);
+    return;
+  }
+  document.getElementById('f_sn').value = sn;
+  checkSnValidity();
+  const hadHistory = applyHistoryToForm(sn);
+  if(!hadHistory) showToast('SN autocompletado desde la base maestra');
+}
+
+document.getElementById('f_spn').addEventListener('blur', applySPNLookup);
+document.getElementById('f_spn').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') applySPNLookup();
+});
+
 function updateDatePreview(inputId, previewId){
   const input = document.getElementById(inputId);
   const preview = document.getElementById(previewId);
