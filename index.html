@@ -355,10 +355,11 @@
 
     <div id="damageReportSection" style="display:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">
       <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;">Reporte de daño (PDF) — disponible para unidades con STATUS <strong>Damaged</strong></label>
-      <div id="damageReportCurrent" style="display:none;font-size:13px;margin-bottom:10px;">
-        <a id="damageReportLink" href="#" target="_blank" rel="noopener" style="color:var(--yellow);text-decoration:none;">📄 Ver reporte adjunto</a>
-        <span id="damageReportMeta" class="mono" style="color:var(--muted);font-size:11px;margin-left:8px;"></span>
-        <button type="button" class="btn-ghost" id="btnRemoveDamageReport" style="color:var(--red);margin-left:8px;">Eliminar reporte</button>
+      <div id="damageReportCurrent" style="display:none;font-size:13px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap;">
+        <a id="damageReportLink" href="#" target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:6px;background:var(--yellow-dim);color:var(--yellow);border:1px solid var(--yellow);padding:8px 14px;border-radius:6px;font-weight:600;text-decoration:none;">📄 Ver reporte adjunto (PDF)</a>
+        <span id="damageReportMeta" class="mono" style="color:var(--muted);font-size:11px;"></span>
+        <button type="button" class="btn-ghost" id="btnRemoveDamageReport" style="color:var(--red);">Eliminar reporte</button>
       </div>
       <div id="damageReportHint" style="display:none;font-size:12px;color:var(--muted);margin-bottom:10px;">Guarda el registro primero para poder adjuntar el reporte.</div>
       <div id="damageReportUpload" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -524,6 +525,7 @@ function startListeners(){
     records = snapshot.docs.map(d=>({ id: d.id, ...d.data() }));
     renderTable();
     updateStats();
+    renderDamageReportSection();
     // Refresh the unit-history panel if it's showing a search
     if(document.getElementById('historySearch').value.trim()) renderHistoryResults();
 
@@ -702,10 +704,10 @@ function renderDamageReportSection(){
   const upload = document.getElementById('damageReportUpload');
 
   if(hasReport){
-    current.style.display = 'block';
+    current.style.display = 'flex';
     const link = document.getElementById('damageReportLink');
     link.href = rec.damageReportUrl;
-    link.textContent = `📄 ${rec.damageReportName || 'Ver reporte adjunto'}`;
+    link.textContent = `📄 Ver reporte adjunto${rec.damageReportName ? ' · ' + rec.damageReportName : ''}`;
     const meta = document.getElementById('damageReportMeta');
     meta.textContent = rec.damageReportAt ? `adjuntado ${rec.damageReportAt.slice(0,10)}` : '';
   } else {
@@ -870,7 +872,7 @@ function renderTable(){
       <td class="mono">${r.vm||'—'}</td>
       <td>${r.vpn ? `<span class="pill ${pillClass(r.vpn)}">${r.vpn}</span>` : '—'}</td>
       <td>${r.bateria ? `<span class="pill ${pillClass(r.bateria)}">${r.bateria}</span>` : '—'}</td>
-      <td>${r.status||'—'}${r.damageReportUrl ? ` <a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" onclick="event.stopPropagation()" style="color:var(--yellow);text-decoration:none;">📄</a>` : ''}</td>
+      <td>${r.status||'—'}${r.damageReportUrl ? `<br><a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" onclick="event.stopPropagation()" style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;">📄 Ver PDF</a>` : ''}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
@@ -1296,7 +1298,7 @@ function renderHistoryResults(){
     html += `<tr>
       <td class="cell-id">${r.sn||'—'}</td>
       <td class="cell-id">${r.spn||'—'}</td>
-      <td>${r.status||'—'}${r.damageReportUrl ? ` <a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" style="color:var(--yellow);text-decoration:none;">📄</a>` : ''}</td>
+      <td>${r.status||'—'}${r.damageReportUrl ? `<br><a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;">📄 Ver PDF</a>` : ''}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
