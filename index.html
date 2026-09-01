@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDLO5fbCW76_JKm3OosL5Wpe8zBopA-XBg",
@@ -23,6 +24,7 @@
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
+  const storage = firebase.storage();
 </script>
 <script src="pizzip.min.js"></script>
 <script src="docxtemplater.min.js"></script>
@@ -351,6 +353,20 @@
       </div>
     </div>
 
+    <div id="damageReportSection" style="display:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;">Reporte de daño (PDF) — disponible para unidades con STATUS <strong>Damaged</strong></label>
+      <div id="damageReportCurrent" style="display:none;font-size:13px;margin-bottom:10px;">
+        <a id="damageReportLink" href="#" target="_blank" rel="noopener" style="color:var(--yellow);text-decoration:none;">📄 Ver reporte adjunto</a>
+        <span id="damageReportMeta" class="mono" style="color:var(--muted);font-size:11px;margin-left:8px;"></span>
+        <button type="button" class="btn-ghost" id="btnRemoveDamageReport" style="color:var(--red);margin-left:8px;">Eliminar reporte</button>
+      </div>
+      <div id="damageReportHint" style="display:none;font-size:12px;color:var(--muted);margin-bottom:10px;">Guarda el registro primero para poder adjuntar el reporte.</div>
+      <div id="damageReportUpload" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;">
+        <input type="file" id="damageReportFile" accept="application/pdf" style="font-size:12px;color:var(--muted);">
+        <button type="button" class="btn-secondary" id="btnUploadDamageReport">Subir PDF</button>
+      </div>
+    </div>
+
     <div class="actions">
       <button class="btn-primary" id="btnSave">Guardar registro</button>
       <button class="btn-secondary" id="btnClear">Limpiar formulario</button>
@@ -487,6 +503,12 @@ function formatDatePretty(isoDate){
   return `${months[m-1]} ${d}${ordinalSuffix(d)}, ${y}`;
 }
 
+function escapeAttr(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -598,6 +620,7 @@ function fillForm(rec){
   updateDatePreview('f_recibido','recibidoPretty');
   updateDatePreview('f_entregado','entregadoPretty');
   checkSnValidity();
+  renderDamageReportSection();
 }
 
 function clearForm(){
@@ -609,6 +632,7 @@ function clearForm(){
   document.getElementById('suggestions').style.display = 'none';
   document.getElementById('snWarning').style.display = 'none';
   document.getElementById('snOk').style.display = 'none';
+  renderDamageReportSection();
 }
 
 document.getElementById('btnClear').addEventListener('click', clearForm);
@@ -645,11 +669,116 @@ document.getElementById('btnDelete').addEventListener('click', async ()=>{
   if(!editingId) return;
   if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
   try{
+    const rec = records.find(r=>r.id===editingId);
+    if(rec && rec.damageReportName){
+      await storage.ref(`damage-reports/${editingId}/${rec.damageReportName}`).delete().catch(()=>{});
+    }
     await db.collection('records').doc(editingId).delete();
     clearForm();
     showToast('Registro eliminado');
   }catch(e){
     showToast('Error eliminando: ' + e.message);
+  }
+});
+
+// ---- Damage report (PDF) attachment ----
+function renderDamageReportSection(){
+  const section = document.getElementById('damageReportSection');
+  if(!section) return;
+  const rawStatus = document.getElementById('f_status').value;
+  const status = STATUS_LEGACY_MAP[rawStatus] || rawStatus;
+  const rec = editingId ? records.find(r=>r.id===editingId) : null;
+  const hasReport = !!(rec && rec.damageReportUrl);
+
+  // Visible when the unit is Damaged, or when a report is already attached
+  if(status !== 'Damaged' && !hasReport){
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  const current = document.getElementById('damageReportCurrent');
+  const hint = document.getElementById('damageReportHint');
+  const upload = document.getElementById('damageReportUpload');
+
+  if(hasReport){
+    current.style.display = 'block';
+    const link = document.getElementById('damageReportLink');
+    link.href = rec.damageReportUrl;
+    link.textContent = `📄 ${rec.damageReportName || 'Ver reporte adjunto'}`;
+    const meta = document.getElementById('damageReportMeta');
+    meta.textContent = rec.damageReportAt ? `adjuntado ${rec.damageReportAt.slice(0,10)}` : '';
+  } else {
+    current.style.display = 'none';
+  }
+
+  if(editingId){
+    hint.style.display = 'none';
+    upload.style.display = 'flex';
+    document.getElementById('btnUploadDamageReport').textContent = hasReport ? 'Reemplazar PDF' : 'Subir PDF';
+  } else {
+    hint.style.display = 'block';
+    upload.style.display = 'none';
+  }
+}
+
+document.getElementById('f_status').addEventListener('change', renderDamageReportSection);
+
+document.getElementById('btnUploadDamageReport').addEventListener('click', async ()=>{
+  if(!editingId){ showToast('Guarda el registro primero'); return; }
+  const fileInput = document.getElementById('damageReportFile');
+  const file = fileInput.files[0];
+  if(!file){ showToast('Selecciona un archivo PDF'); return; }
+  if(file.type !== 'application/pdf'){ showToast('El archivo debe ser un PDF'); return; }
+  if(file.size > 20 * 1024 * 1024){ showToast('El PDF supera los 20 MB'); return; }
+
+  const rec = records.find(r=>r.id===editingId);
+  const btn = document.getElementById('btnUploadDamageReport');
+  btn.disabled = true;
+  try{
+    showToast('Subiendo reporte...');
+    if(rec && rec.damageReportName && rec.damageReportName !== file.name){
+      await storage.ref(`damage-reports/${editingId}/${rec.damageReportName}`).delete().catch(()=>{});
+    }
+    const ref = storage.ref(`damage-reports/${editingId}/${file.name}`);
+    await ref.put(file, { contentType: 'application/pdf' });
+    const url = await ref.getDownloadURL();
+    const at = new Date().toISOString();
+    await db.collection('records').doc(editingId).update({
+      damageReportUrl: url,
+      damageReportName: file.name,
+      damageReportAt: at
+    });
+    // Update the in-memory copy so the section refreshes before the snapshot lands
+    if(rec){ rec.damageReportUrl = url; rec.damageReportName = file.name; rec.damageReportAt = at; }
+    fileInput.value = '';
+    showToast('Reporte adjuntado');
+    renderDamageReportSection();
+  }catch(e){
+    showToast('Error subiendo reporte: ' + (e.code || e.message));
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btnRemoveDamageReport').addEventListener('click', async ()=>{
+  if(!editingId) return;
+  if(!confirm('¿Eliminar el reporte de daño adjunto?')) return;
+  const rec = records.find(r=>r.id===editingId);
+  try{
+    if(rec && rec.damageReportName){
+      await storage.ref(`damage-reports/${editingId}/${rec.damageReportName}`).delete().catch(()=>{});
+    }
+    await db.collection('records').doc(editingId).update({
+      damageReportUrl: firebase.firestore.FieldValue.delete(),
+      damageReportName: firebase.firestore.FieldValue.delete(),
+      damageReportAt: firebase.firestore.FieldValue.delete()
+    });
+    if(rec){ delete rec.damageReportUrl; delete rec.damageReportName; delete rec.damageReportAt; }
+    showToast('Reporte eliminado');
+    renderDamageReportSection();
+  }catch(e){
+    showToast('Error eliminando reporte: ' + (e.code || e.message));
   }
 });
 
@@ -741,7 +870,7 @@ function renderTable(){
       <td class="mono">${r.vm||'—'}</td>
       <td>${r.vpn ? `<span class="pill ${pillClass(r.vpn)}">${r.vpn}</span>` : '—'}</td>
       <td>${r.bateria ? `<span class="pill ${pillClass(r.bateria)}">${r.bateria}</span>` : '—'}</td>
-      <td>${r.status||'—'}</td>
+      <td>${r.status||'—'}${r.damageReportUrl ? ` <a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" onclick="event.stopPropagation()" style="color:var(--yellow);text-decoration:none;">📄</a>` : ''}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
@@ -1167,7 +1296,7 @@ function renderHistoryResults(){
     html += `<tr>
       <td class="cell-id">${r.sn||'—'}</td>
       <td class="cell-id">${r.spn||'—'}</td>
-      <td>${r.status||'—'}</td>
+      <td>${r.status||'—'}${r.damageReportUrl ? ` <a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" style="color:var(--yellow);text-decoration:none;">📄</a>` : ''}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
