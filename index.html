@@ -454,6 +454,7 @@
             <th>VPN</th>
             <th>Batería</th>
             <th>Status</th>
+            <th>Reporte</th>
             <th>Repair Order</th>
             <th>Notes</th>
             <th>Recibido</th>
@@ -872,7 +873,8 @@ function renderTable(){
       <td class="mono">${r.vm||'—'}</td>
       <td>${r.vpn ? `<span class="pill ${pillClass(r.vpn)}">${r.vpn}</span>` : '—'}</td>
       <td>${r.bateria ? `<span class="pill ${pillClass(r.bateria)}">${r.bateria}</span>` : '—'}</td>
-      <td>${r.status||'—'}${r.damageReportUrl ? `<br><a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" onclick="event.stopPropagation()" style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;">📄 Ver PDF</a>` : ''}</td>
+      <td>${r.status||'—'}</td>
+      <td>${r.damageReportUrl ? `<a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;font-weight:600;">📄 Ver PDF</a>` : '—'}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
@@ -1292,13 +1294,14 @@ function renderHistoryResults(){
   }
 
   html += `<div class="history-table-wrap"><h3>Detalle de visitas</h3><table><thead><tr>
-    <th>SN</th><th>SPN</th><th>Status</th><th>Repair Order</th><th>Notes</th><th>Recibido</th><th>Entregado</th>
+    <th>SN</th><th>SPN</th><th>Status</th><th>Reporte</th><th>Repair Order</th><th>Notes</th><th>Recibido</th><th>Entregado</th>
   </tr></thead><tbody>`;
   matches.slice().sort((a,b)=>(b.recibido||'').localeCompare(a.recibido||'')).forEach(r=>{
     html += `<tr>
       <td class="cell-id">${r.sn||'—'}</td>
       <td class="cell-id">${r.spn||'—'}</td>
-      <td>${r.status||'—'}${r.damageReportUrl ? `<br><a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;">📄 Ver PDF</a>` : ''}</td>
+      <td>${r.status||'—'}</td>
+      <td>${r.damageReportUrl ? `<a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;font-weight:600;">📄 Ver PDF</a>` : '—'}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
