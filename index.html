@@ -354,6 +354,10 @@
     </div>
 
     <div id="damageReportSection" style="display:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">
+      <div style="margin-bottom:18px;">
+        <label for="f_ticketurl" style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;">Enlace al ticket (Jira / Service Desk) — disponible para unidades con STATUS <strong>Damaged</strong></label>
+        <input type="url" id="f_ticketurl" placeholder="https://immfly.atlassian.net/servicedesk/customer/portal/226/ASD-501">
+      </div>
       <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;">Reporte de daño (PDF) — disponible para unidades con STATUS <strong>Damaged</strong></label>
       <div id="damageReportCurrent" style="display:none;font-size:13px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap;">
         <a id="damageReportLink" href="#" target="_blank" rel="noopener"
@@ -455,6 +459,7 @@
             <th>Batería</th>
             <th>Status</th>
             <th>Reporte</th>
+            <th>Ticket</th>
             <th>Repair Order</th>
             <th>Notes</th>
             <th>Recibido</th>
@@ -511,11 +516,12 @@ function escapeAttr(s){
     .replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function showToast(msg){
+function showToast(msg, duration){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2200);
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(()=>t.classList.remove('show'), duration || 2200);
 }
 
 let statusMigrationDone = false;
@@ -604,6 +610,7 @@ function fieldsFromForm(){
     vpn: document.getElementById('f_vpn').value,
     bateria: document.getElementById('f_bateria').value,
     notes: document.getElementById('f_notes').value.trim(),
+    ticketurl: document.getElementById('f_ticketurl').value.trim(),
     recibido: document.getElementById('f_recibido').value,
     entregado: document.getElementById('f_entregado').value,
   };
@@ -618,6 +625,7 @@ function fillForm(rec){
   document.getElementById('f_vpn').value = rec.vpn||'';
   document.getElementById('f_bateria').value = rec.bateria||'';
   document.getElementById('f_notes').value = rec.notes||'';
+  document.getElementById('f_ticketurl').value = rec.ticketurl||'';
   document.getElementById('f_recibido').value = rec.recibido||'';
   document.getElementById('f_entregado').value = rec.entregado||'';
   updateDatePreview('f_recibido','recibidoPretty');
@@ -692,9 +700,10 @@ function renderDamageReportSection(){
   const status = STATUS_LEGACY_MAP[rawStatus] || rawStatus;
   const rec = editingId ? records.find(r=>r.id===editingId) : null;
   const hasReport = !!(rec && rec.damageReportUrl);
+  const hasTicket = !!(rec && rec.ticketurl);
 
-  // Visible when the unit is Damaged, or when a report is already attached
-  if(status !== 'Damaged' && !hasReport){
+  // Visible when the unit is Damaged, or when a report/ticket is already attached
+  if(status !== 'Damaged' && !hasReport && !hasTicket){
     section.style.display = 'none';
     return;
   }
@@ -758,7 +767,8 @@ document.getElementById('btnUploadDamageReport').addEventListener('click', async
     showToast('Reporte adjuntado');
     renderDamageReportSection();
   }catch(e){
-    showToast('Error subiendo reporte: ' + (e.code || e.message));
+    console.error('Error subiendo reporte de daño:', e);
+    showToast('Error subiendo reporte: ' + (e.code || e.message), 8000);
   }finally{
     btn.disabled = false;
   }
@@ -781,7 +791,8 @@ document.getElementById('btnRemoveDamageReport').addEventListener('click', async
     showToast('Reporte eliminado');
     renderDamageReportSection();
   }catch(e){
-    showToast('Error eliminando reporte: ' + (e.code || e.message));
+    console.error('Error eliminando reporte de daño:', e);
+    showToast('Error eliminando reporte: ' + (e.code || e.message), 8000);
   }
 });
 
@@ -875,6 +886,7 @@ function renderTable(){
       <td>${r.bateria ? `<span class="pill ${pillClass(r.bateria)}">${r.bateria}</span>` : '—'}</td>
       <td>${r.status||'—'}</td>
       <td>${r.damageReportUrl ? `<a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;font-weight:600;">📄 Ver PDF</a>` : '—'}</td>
+      <td>${r.ticketurl ? `<a href="${escapeAttr(r.ticketurl)}" target="_blank" rel="noopener" title="${escapeAttr(r.ticketurl)}" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;font-weight:600;">🎫 Ver ticket</a>` : '—'}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
@@ -1294,7 +1306,7 @@ function renderHistoryResults(){
   }
 
   html += `<div class="history-table-wrap"><h3>Detalle de visitas</h3><table><thead><tr>
-    <th>SN</th><th>SPN</th><th>Status</th><th>Reporte</th><th>Repair Order</th><th>Notes</th><th>Recibido</th><th>Entregado</th>
+    <th>SN</th><th>SPN</th><th>Status</th><th>Reporte</th><th>Ticket</th><th>Repair Order</th><th>Notes</th><th>Recibido</th><th>Entregado</th>
   </tr></thead><tbody>`;
   matches.slice().sort((a,b)=>(b.recibido||'').localeCompare(a.recibido||'')).forEach(r=>{
     html += `<tr>
@@ -1302,6 +1314,7 @@ function renderHistoryResults(){
       <td class="cell-id">${r.spn||'—'}</td>
       <td>${r.status||'—'}</td>
       <td>${r.damageReportUrl ? `<a href="${escapeAttr(r.damageReportUrl)}" target="_blank" rel="noopener" title="${escapeAttr(r.damageReportName||'Reporte de daño')}" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;font-weight:600;">📄 Ver PDF</a>` : '—'}</td>
+      <td>${r.ticketurl ? `<a href="${escapeAttr(r.ticketurl)}" target="_blank" rel="noopener" title="${escapeAttr(r.ticketurl)}" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--yellow-dim);color:var(--yellow);text-decoration:none;white-space:nowrap;font-weight:600;">🎫 Ver ticket</a>` : '—'}</td>
       <td class="cell-id">${r.repairorder||'—'}</td>
       <td class="cell-notes">${r.notes||'—'}</td>
       <td class="mono">${r.recibido ? formatDatePretty(r.recibido) : '—'}</td>
